@@ -3,7 +3,7 @@
 실제 체코 은행 공개 데이터(Berka Dataset)를 MySQL로 적재하는 ETL 파이프라인과
 Z-Score / Isolation Forest / Autoencoder 3단계 이상 탐지 모듈입니다.
 
-> **연관 레포**: [BerkaAnalyticsDashboard](https://github.com/{your-username}/BerkaAnalyticsDashboard) — WPF 분석 대시보드
+> **연관 레포**: [BerkaAnalyticsDashboard](https://github.com/{Yumjiin}/BerkaAnalyticsDashboard) — WPF 분석 대시보드
 
 ---
 
@@ -95,7 +95,7 @@ python pipeline.py
 
 ## 데이터셋
 
-[Berka Dataset](https://sorry.vse.cz/~berka/challenge/pkdd1999/) — 1993~1998년 체코 은행 실제 거래 데이터
+[Berka Dataset]([https://sorry.vse.cz/~berka/challenge/pkdd1999/](https://www.kaggle.com/datasets/marceloventura/the-berka-dataset)) — 1993~1998년 체코 은행 실제 거래 데이터
 
 - 계좌: 4,500개
 - 거래: 약 1,000,000건
@@ -121,4 +121,4 @@ python pipeline.py
 
 - [프로젝트 설계서](./docs/BerkaAnalytics_설계서.md)
 - [기획서 + IA](./docs/BerkaAnalytics_기획서_IA.md)
-- [Figma 와이어프레임](https://figma.com/{your-figma-link})
+- [Figma 와이어프레임](https://figma.com/{[your-figma-link](https://www.figma.com/design/apK5GQdChjRr2nldRsveic/BerkaAnalytics-%E2%80%94-Wireframe?node-id=0-1&p=f&t=fTBbadj3a5oA2nDS-0)})
