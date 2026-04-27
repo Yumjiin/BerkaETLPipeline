@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+
+  # MySQL DB
+  mysql:
+    image: mysql:8.0
+    container_name: berka_mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql    # 데이터 영속화
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ETL 파이프라인
+  etl:
+    build: .
+    container_name: berka_etl
+    depends_on:
+      mysql:
+        condition: service_healthy    # MySQL 준비 후 실행
+    env_file:
+      - .env
+    environment:
+      DB_HOST: mysql                 # 컨테이너 이름으로 연결
+    volumes:
+      - ./data:/app/data             # 로컬 CSV 파일 마운트
+
+volumes:
+  mysql_data:
