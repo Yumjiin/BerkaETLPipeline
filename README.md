@@ -3,7 +3,7 @@
 실제 체코 은행 공개 데이터(Berka Dataset)를 MySQL로 적재하는 ETL 파이프라인과
 Z-Score / Isolation Forest / Autoencoder 3단계 이상 탐지 모듈입니다.
 
-> **연관 레포**: [BerkaAnalyticsDashboard](https://github.com/{Yumjiin}/BerkaAnalyticsDashboard) — WPF 분석 대시보드
+> **연관 레포**: [BerkaAnalyticsDashboard](https://github.com/Yumjiin/BerkaAnalyticsDashboard) — WPF 분석 대시보드
 
 ---
 
