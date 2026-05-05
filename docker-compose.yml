@@ -3,6 +3,7 @@ services:
   # MySQL DB
   mysql:
     image: mysql:8.0
+    restart: unless-stopped
     container_name: berka_mysql
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
