@@ -14,10 +14,7 @@ def get_engine(database_url: str) -> Engine:
 
 
 def create_tables(engine: Engine) -> None:
-    """
-    MySQL 테이블 생성 (없으면 생성, 있으면 스킵).
-    설계서 스키마 기준.
-    """
+    """MySQL 테이블 생성 (없으면 생성, 있으면 스킵)."""
     sql = """
     CREATE TABLE IF NOT EXISTS raw_transactions (
         trans_id   INT PRIMARY KEY,
@@ -77,26 +74,22 @@ def load_table(
     table_name: str,
     engine: Engine,
     chunksize: int = 5000,
-    if_exists: str = "append",
 ) -> None:
     """
     DataFrame을 MySQL 테이블에 적재.
-
-    Args:
-        df:         적재할 DataFrame
-        table_name: MySQL 테이블 이름
-        engine:     SQLAlchemy 엔진
-        chunksize:  한 번에 insert할 행 수 (기본 5000)
-        if_exists:  테이블 존재 시 처리 방법 (append / replace)
+    중복 데이터는 INSERT IGNORE로 무시.
     """
     logger.info(f"[LOAD] {table_name} 적재 시작 — {len(df):,}행")
-    df.to_sql(
-        name=table_name,
-        con=engine,
-        if_exists=if_exists,
-        index=False,
-        chunksize=chunksize,
-    )
+
+    cols = ", ".join(df.columns)
+    placeholders = ", ".join([f":{c}" for c in df.columns])
+    sql = f"INSERT IGNORE INTO {table_name} ({cols}) VALUES ({placeholders})"
+
+    with engine.begin() as conn:
+        for i in range(0, len(df), chunksize):
+            chunk = df.iloc[i:i + chunksize]
+            conn.execute(text(sql), chunk.to_dict(orient="records"))
+
     logger.info(f"[LOAD] {table_name} 적재 완료")
 
 
@@ -105,27 +98,12 @@ def load_all(
     aggregated: dict[str, pd.DataFrame],
     database_url: str,
 ) -> None:
-    """
-    전체 적재 실행.
-    pipeline.py 에서 호출하는 메인 함수.
-
-    Args:
-        cleaned:      clean_all() 결과 (정제된 테이블들)
-        aggregated:   aggregate_all() 결과 (집계 테이블들)
-        database_url: MySQL 접속 URL
-    """
+    """전체 적재 실행. pipeline.py 에서 호출."""
     engine = get_engine(database_url)
-
-    # 테이블 생성
     create_tables(engine)
 
-    # raw_transactions 적재 (100만 건 → chunksize로 나눠서)
     load_table(cleaned["trans"], "raw_transactions", engine, chunksize=5000)
-
-    # daily_summary 적재
     load_table(aggregated["daily_summary"], "daily_summary", engine)
-
-    # category_summary 적재
     load_table(aggregated["category_summary"], "category_summary", engine)
 
     logger.info("[LOAD] 전체 적재 완료")
