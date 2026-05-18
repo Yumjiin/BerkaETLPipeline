@@ -5,6 +5,7 @@ from extract.extractor import load_all
 from transform.cleaner import clean_all
 from transform.aggregator import aggregate_all
 from load.loader import load_all as load_to_db
+from detection.zscore_detector import detect_zscore, save_anomalies
 
 logging.basicConfig(
     level=logging.INFO,
@@ -36,6 +37,20 @@ def run():
     logger.info("[3/3] LOAD 단계 시작")
     load_to_db(cleaned, aggregated, DATABASE_URL)
 
+    # ── 4. Anomaly Detection ─────────────────────────
+    logger.info("[4/4] 이상 탐지 단계 시작")
+    engine = get_engine(DATABASE_URL)
+
+    # Z-Score
+    zscore_result = detect_zscore(aggregated["daily_summary"], threshold=ZSCORE_THRESHOLD)
+    save_anomalies(zscore_result, engine)
+ 
+    # Isolation Forest (다음 단계)
+    logger.info("[DETECTION] Isolation Forest — 미구현 (다음 단계)")
+ 
+    # Autoencoder (다음 단계)
+    logger.info("[DETECTION] Autoencoder — 미구현 (다음 단계)")
+    
     elapsed = time.time() - start
     logger.info(f"파이프라인 완료 — 소요 시간: {elapsed:.1f}초")
 
