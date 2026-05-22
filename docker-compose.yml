@@ -33,6 +33,7 @@ services:
       DB_HOST: mysql
     volumes:
       - ./data:/app/data
+      - .:/app
 
   # 이상 탐지 파이프라인 (MySQL → anomaly_flags)
   detection:
@@ -48,6 +49,7 @@ services:
       DATABASE_URL: "mysql+pymysql://${DB_USER}:${DB_PASSWORD}@mysql:3306/${DB_NAME}"
     volumes:
       - ./data:/app/data
+      - .:/app
     command: ["python", "detection_pipeline.py"]
 
 volumes:
