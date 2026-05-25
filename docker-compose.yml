@@ -50,6 +50,7 @@ services:
     volumes:
       - ./data:/app/data
       - .:/app
+      - ./models:/app/models
     command: ["python", "detection_pipeline.py"]
 
 volumes:
