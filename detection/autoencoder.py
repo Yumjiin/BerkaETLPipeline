@@ -121,12 +121,17 @@ def detect_autoencoder(
     total_count   = len(df)
     logger.info(f"[AE] 탐지 완료 — 전체 {total_count:,}건 중 이상 {anomaly_count:,}건 ({anomaly_count/total_count*100:.2f}%)")
 
-    return df[["account_id", "date", "total_amount", "score", "is_anomaly", "method"]]
+    df["threshold"] = float(threshold)
+    return df[["account_id", "date", "total_amount", "score", "is_anomaly", "method", "threshold"]]
 
 
 # ── 저장 함수 ────────────────────────────────────────────
-def save_anomalies(result: pd.DataFrame, engine: Engine) -> None:
-    """탐지 결과를 anomaly_flags 테이블에 저장."""
+def save_anomalies(result: pd.DataFrame, engine: Engine, threshold: float = None) -> None:
+    """
+    탐지 결과를 MySQL anomaly_flags 테이블에 저장.
+    autoencoder_detail 테이블에 판단 근거 저장.
+    """
+    # ── anomaly_flags 저장 (기존과 동일) ──
     with engine.begin() as conn:
         conn.execute(text("DELETE FROM anomaly_flags WHERE method = 'autoencoder'"))
     logger.info("[AE] 기존 결과 삭제 완료")
@@ -142,3 +147,38 @@ def save_anomalies(result: pd.DataFrame, engine: Engine) -> None:
         chunksize=5000,
     )
     logger.info(f"[AE] anomaly_flags 저장 완료 — {len(to_save):,}건")
+
+    # ── autoencoder_detail 저장 (판단 근거) ──
+    with engine.begin() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS autoencoder_detail (
+                id                   INT AUTO_INCREMENT PRIMARY KEY,
+                account_id           INT NOT NULL,
+                date                 DATE NOT NULL,
+                amount               DECIMAL(12,2),
+                reconstruction_error DECIMAL(10,6),
+                threshold            DECIMAL(10,6),
+                is_anomaly           TINYINT(1)
+            )
+        """))
+        conn.execute(text("DELETE FROM autoencoder_detail"))
+
+    detail = result.copy()
+    detail["is_anomaly"]           = detail["is_anomaly"].astype(int)
+    detail["amount"]               = detail["total_amount"]
+    detail["reconstruction_error"] = detail["score"].round(6)
+
+    # threshold가 전달되지 않으면 score 95 percentile로 계산
+    if threshold is None:
+        threshold = float(result["score"].quantile(0.95))
+    detail["threshold"] = result["threshold"].round(6)
+
+    detail[["account_id", "date", "amount",
+            "reconstruction_error", "threshold", "is_anomaly"]].to_sql(
+        name="autoencoder_detail",
+        con=engine,
+        if_exists="append",
+        index=False,
+        chunksize=5000,
+    )
+    logger.info(f"[AE] autoencoder_detail 저장 완료 — {len(detail):,}건")

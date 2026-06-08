@@ -52,15 +52,16 @@ def detect_isolation_forest(
     total_count   = len(df)
     logger.info(f"[IFOREST] 탐지 완료 — 전체 {total_count:,}건 중 이상 {anomaly_count:,}건 ({anomaly_count/total_count*100:.2f}%)")
 
-    return df[["account_id", "date", "total_amount", "score", "is_anomaly", "method"]]
+    return df[["account_id", "date", "total_amount", "tx_count",
+           "avg_amount", "max_amount", "score", "is_anomaly", "method"]]
 
 
 def save_anomalies(result: pd.DataFrame, engine: Engine) -> None:
     """
     탐지 결과를 MySQL anomaly_flags 테이블에 저장.
-    기존 isolation_forest 결과는 덮어씀.
+    iforest_detail 테이블에 판단 근거 저장.
     """
-    # 기존 isolation_forest 결과 삭제
+    # ── anomaly_flags 저장 (기존과 동일) ──
     with engine.begin() as conn:
         conn.execute(text("DELETE FROM anomaly_flags WHERE method = 'isolation_forest'"))
     logger.info("[IFOREST] 기존 결과 삭제 완료")
@@ -76,3 +77,34 @@ def save_anomalies(result: pd.DataFrame, engine: Engine) -> None:
         chunksize=5000,
     )
     logger.info(f"[IFOREST] anomaly_flags 저장 완료 — {len(to_save):,}건")
+
+    # ── iforest_detail 저장 (판단 근거) ──
+    with engine.begin() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS iforest_detail (
+                id           INT AUTO_INCREMENT PRIMARY KEY,
+                account_id   INT NOT NULL,
+                date         DATE NOT NULL,
+                amount       DECIMAL(12,2),
+                tx_count     INT,
+                avg_amount   DECIMAL(12,2),
+                max_amount   DECIMAL(12,2),
+                score        DECIMAL(8,4),
+                is_anomaly   TINYINT(1)
+            )
+        """))
+        conn.execute(text("DELETE FROM iforest_detail"))
+
+    detail = result.copy()
+    detail["is_anomaly"] = detail["is_anomaly"].astype(int)
+    detail["amount"]     = detail["total_amount"]
+
+    detail[["account_id", "date", "amount", "tx_count",
+            "avg_amount", "max_amount", "score", "is_anomaly"]].to_sql(
+        name="iforest_detail",
+        con=engine,
+        if_exists="append",
+        index=False,
+        chunksize=5000,
+    )
+    logger.info(f"[IFOREST] iforest_detail 저장 완료 — {len(detail):,}건")
