@@ -7,7 +7,8 @@
 ![PyTorch](https://img.shields.io/badge/PyTorch-DL-EE4C2C?logo=pytorch&logoColor=white)
 
 실제 체코 은행 공개 데이터(Berka Dataset)를 MySQL로 적재하는 ETL 파이프라인과  
-Z-Score → Isolation Forest → Autoencoder 3단계 이상 탐지 모듈입니다.
+Z-Score · Isolation Forest · Autoencoder 3가지 방법으로 이상 거래를 탐지하는
+비지도 학습 기반 이상 탐지 모듈입니다.
 
 > **연관 레포**: [BerkaAnalyticsDashboard](https://github.com/Yumjiin/BerkaAnalyticsDashboard)
 > — ETL로 적재된 MySQL 데이터를 시각화하는 WPF 4분할 분석 대시보드
@@ -19,15 +20,21 @@ Z-Score → Isolation Forest → Autoencoder 3단계 이상 탐지 모듈입니�
 ```
 Berka CSV (8개)
     ↓
-Extract        (extract/extractor.py)     CSV 읽기 + 스키마 검증
+Extract        (extract/extractor.py)          CSV 읽기 + 스키마 검증
     ↓
-Transform      (transform/cleaner.py)     결측치 처리 + 타입 변환
-               (transform/aggregator.py)  일별/월별/업종별 집계
-               (transform/feature_builder.py) 계좌 프로파일 생성
+Transform      (transform/cleaner.py)          결측치 처리 + 타입 변환
+               (transform/aggregator.py)       일별/업종별 집계
+               (transform/feature_builder.py)  계좌 프로파일 생성
     ↓
-Load           (load/loader.py)           MySQL 적재
+Load           (load/loader.py)                MySQL 적재
     ↓
-Detection      Z-Score / Isolation Forest / Autoencoder
+Detection      (detection/zscore_detector.py)      Z-Score 통계 기반
+               (detection/isolation_forest.py)     Isolation Forest ML 기반
+               (detection/autoencoder.py)           Autoencoder 딥러닝
+               (detection/evaluator.py)             앙상블 + Precision@K 평가
+    ↓
+Detail 저장    zscore_detail / iforest_detail / autoencoder_detail
+               탐지 판단 근거 (z_value, score, reconstruction_error 등)
 ```
 
 ---
@@ -49,25 +56,28 @@ Detection      Z-Score / Isolation Forest / Autoencoder
 ```
 BerkaETLPipeline/
 ├── extract/
-│   └── extractor.py          CSV 읽기 + 스키마 검증
+│   └── extractor.py           CSV 읽기 + 스키마 검증
 ├── transform/
-│   ├── cleaner.py            결측치 처리 + 타입 변환
-│   ├── aggregator.py         일별/월별/업종별 집계
-│   └── feature_builder.py   계좌 프로파일 생성
+│   ├── cleaner.py             결측치 처리 + 타입 변환
+│   ├── aggregator.py          일별/업종별 집계
+│   └── feature_builder.py    계좌 프로파일 생성
 ├── load/
-│   └── loader.py             MySQL 적재
+│   └── loader.py              MySQL 적재
 ├── detection/
-│   ├── zscore_detector.py    Z-Score 통계 기반
-│   ├── isolation_forest.py   Isolation Forest ML 기반
-│   ├── autoencoder.py        Autoencoder 딥러닝
-│   └── evaluator.py          Precision@K 평가
+│   ├── zscore_detector.py     Z-Score 통계 기반
+│   ├── isolation_forest.py    Isolation Forest ML 기반
+│   ├── autoencoder.py         Autoencoder 딥러닝
+│   └── evaluator.py           Precision@K 평가
+├── models/
+│   ├── autoencoder.pt         학습된 Autoencoder 모델
+│   └── autoencoder.onnx       ONNX 변환 모델
 ├── data/
-│   └── raw/                  Berka CSV 원본 (gitignore)
-├── pipeline.py               전체 파이프라인 실행 진입점
-├── config.py                 환경변수 로딩
-├── .env.example              환경변수 템플릿
-├── docker-compose.yml        컨테이너 실행
-├── Dockerfile
+│   └── raw/                   Berka CSV 원본 (gitignore)
+├── pipeline.py                ETL 파이프라인 진입점
+├── detection_pipeline.py      이상 탐지 진입점
+├── config.py                  환경변수 로딩
+├── .env.example               환경변수 템플릿
+├── docker-compose.yml
 └── requirements.txt
 ```
 
@@ -75,18 +85,21 @@ BerkaETLPipeline/
 
 ## 실행 방법
 
-### 방법 1 — Docker (권장)
+### 방법 1 - Docker (권장)
 
 ```bash
 # 1. 환경변수 설정
 cp .env.example .env
-# .env 파일에 DB 정보 입력 (아래 환경변수 설정 참고)
+# .env 파일에 DB 정보 입력
 
-# 2. 실행
-docker-compose up
+# 2. ETL 실행
+docker compose run --rm etl
+
+# 3. 이상 탐지 실행
+docker compose run --rm detection
 ```
 
-### 방법 2 — 직접 실행
+### 방법 2 - 직접 실행
 
 ```bash
 # 1. 가상환경 생성
@@ -98,10 +111,10 @@ pip install -r requirements.txt
 
 # 3. 환경변수 설정
 cp .env.example .env
-# .env 파일에 DB 정보 입력 (아래 환경변수 설정 참고)
 
 # 4. 실행
 python pipeline.py
+python detection_pipeline.py
 ```
 
 ---
@@ -116,9 +129,9 @@ DB_PASSWORD=your_password # 원하는 MySQL 비밀번호
 DB_NAME=berka             # 원하는 데이터베이스 이름
 ```
 
-> `DB_HOST`는 docker-compose가 자동으로 `mysql`(내부 서비스명)로 설정하므로 별도 입력 불필요합니다.
+> DB_HOST는 docker-compose가 자동으로 설정합니다. 직접 실행 시 DB_HOST=localhost를 추가하세요.
 
-### 직접 실행의 경우 — MySQL 사전 설정 필요
+### 직접 실행의 경우 - MySQL 사전 설정 필요
 
 Docker 없이 직접 실행할 경우, 로컬 MySQL에서 아래 명령어로 DB와 유저를 먼저 생성해야 합니다.
 
@@ -139,17 +152,36 @@ DB_NAME=berka
 
 ---
 
-## 실행 결과 예시
+## 적재 결과 
 
-```
-[ETL] Extracting 8 CSV files...
-[ETL] Cleaning & transforming...
-[ETL] Loading to MySQL: 1,056,320 rows inserted
-[Detection] Z-Score anomalies:          312
-[Detection] Isolation Forest anomalies: 187
-[Detection] Autoencoder anomalies:       94
-[Done] Pipeline completed in 43.2s
-```
+MySQL 테이블
+
+
+| 테이블                    | 설명                    | 행 수       |
+| ------------------------- | ----------------------  | ----------  |
+| raw_transactions          | 정제된 거래 내역         | 1,056,320행 |
+| daily_summary             | 계좌별 일별 지출 집계     | 597,080행   |
+| category_summary          | 계좌별 업종별 지출 집계   | 13,649행    |
+| account_profiles          | 계좌별 종합 프로파일      | 4,500행     |
+| anomaly_flags             | 모델별 이상 탐지 결과     | 73,476행    |
+| high_confidence_anomalies | 2개 이상 모델 공통 탐지    | 13,288행    |
+| zscore_detail             | Z-Score 판단 근거          | 597,080행   |
+| iforest_detail            | Isolation Forest 판단 근거 | 597,080행   |
+| autoencoder_detail        | Autoencoder 판단 근거      | 597,080행   |
+
+
+이상 탐지 결과 
+
+
+| 모델               | 탐지 건수   | 탐지율   | 판단 근거 저장          |
+| ---------------- | ------- | ----- | -------------------------------  |
+| Z-Score          | 13,795건 | 2.31% | mean, std, z_value              |
+| Isolation Forest | 29,852건 | 5.00% | score, tx_count, avg_amount     |
+| Autoencoder      | 29,829건 | 5.00% | reconstruction_error, threshold |
+| 고신뢰 (2개+ 공통)     | 13,288건 | 2.23% | detected_by, model_count   |
+| 3개 모델 공통         | 3,571건  | 0.60% | —                           |
+
+모두 비지도 학습 방식으로 레이블 없이 작동합니다.
 
 ---
 
@@ -165,18 +197,6 @@ DB_NAME=berka
 
 > 데이터는 저작권 문제로 포함하지 않습니다.  
 > 위 링크에서 직접 다운로드 후 `data/raw/` 에 넣으세요.
-
----
-
-## 이상 탐지 3단계
-
-| 단계 | 방법 | 특징 |
-|------|------|------|
-| 1단계 | Z-Score | 단일 변수(금액) 극단치 탐지 |
-| 2단계 | Isolation Forest | 다변수 고립도 기반 탐지 |
-| 3단계 | Autoencoder | 정상 패턴 학습 후 재구성 오차 탐지 |
-
-모두 **비지도 학습** 방식으로 레이블 없이 작동합니다.
 
 ---
 
